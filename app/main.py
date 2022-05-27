@@ -2,6 +2,7 @@ from fastapi import FastAPI, Response, status, HTTPException, Depends
 from .database import engine, get_db
 from . import models, pydantic_models
 from sqlalchemy.orm import Session
+from typing import List
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -44,22 +45,16 @@ async def root():
     return {"message": "Hello World"}
 
 
-# This creates the table
-@app.get("/sqlalchemy")
-# Here Depends is the dependency from above.
-async def test_quotes(db: Session = Depends(get_db)):
-    return {"status": "success"}
-
-
 # Get all quotes
-@app.get("/quotes")
+@app.get("/quotes", response_model=List[pydantic_models.PostResponse])
 async def quotes(db: Session = Depends(get_db)):
     quotes = db.query(models.Quote).all()
-    return {"Quotes": quotes}
+    return quotes
 
 
 # Create quotes
-@app.post("/quotes", status_code=status.HTTP_201_CREATED)
+@app.post("/quotes", status_code=status.HTTP_201_CREATED,
+          response_model=pydantic_models.PostResponse)
 async def create_quotes(post: pydantic_models.Post,
                         db: Session = Depends(get_db)):
     # This will unpack the request data as a dictionary.
@@ -67,17 +62,17 @@ async def create_quotes(post: pydantic_models.Post,
     db.add(new_quote)
     db.commit()
     db.refresh(new_quote)
-    return {"Quote": new_quote}
+    return new_quote
 
 
 # Get quotes by ID
-@app.get("/quotes/{id}")
+@app.get("/quotes/{id}", response_class=pydantic_models.PostResponse)
 async def get_quote(id: int, db: Session = Depends(get_db)):
     quote = db.query(models.Quote).filter(models.Quote.id == id).first()
     if not quote:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    return {"Quote": quote}
+    return quote
 
 
 # Delete quotes by ID
@@ -94,7 +89,7 @@ async def delete_quote(id: int, db: Session = Depends(get_db)):
 
 
 # Update a quote by ID
-@app.put("/quotes/{id}")
+@app.put("/quotes/{id}", response_model=pydantic_models.PostResponse)
 async def update_quote(id: int, post: pydantic_models.Post,
                        db: Session = Depends(get_db)):
     quote_query = db.query(models.Quote).filter(models.Quote.id == id)
@@ -104,4 +99,4 @@ async def update_quote(id: int, post: pydantic_models.Post,
                             detail=f"A quote with the id: {id} was not found.")
     quote_query.update(post.dict(), synchronize_session=False)
     db.commit()
-    return {"Updated quote": quote_query.first()}
+    return quote_query.first()

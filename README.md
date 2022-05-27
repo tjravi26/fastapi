@@ -410,3 +410,33 @@ async def update_post(id: int, post: Post, db: Session = Depends(get_db)):
     db.commit()
     return {"Updated quote": quote_query.first()}
 ```
+
+### To create a response model
+
+    * Move the pydantic model from `main.py` into a new `pydantic_models.py` and import them into `main.py`
+
+```python
+# .app/pydantic_models.py
+
+from pydantic import BaseModel
+
+class Post(BaseModel):  # This is a pydantic model.
+    title: str
+    content: str
+
+class PostResponse(BaseModel):
+    content: str
+    class Config:
+        orm_mode = True
+```
+
+- Import these models into `main.py`
+
+```python
+from . import pydantic_models
+```
+
+```python
+# To create a new post
+@app.post("/quotes", response_model=pydantic_models.PostResponse)
+```
