@@ -440,3 +440,47 @@ from . import pydantic_models
 # To create a new post
 @app.post("/quotes", response_model=pydantic_models.PostResponse)
 ```
+
+---
+
+## User registration model
+
+```python
+# .app/models.py
+...
+class User(Base): # This creates a user registration model
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    password = Column(String, nullable=False)
+```
+
+### User registration form pydantic model:
+
+```python
+# .app/pydantic_models.py
+...
+class UserCreate(BaseModel):
+    email: str
+    password: str
+
+class UserCreateResponse(BaseModel):
+    email: str
+    class Config:
+        orm_mode = True
+```
+
+### To create a new user:
+
+```python
+# .app/main.py
+
+@app.post("/users", status_code=status.HTTP_201_CREATED,
+          response_model=pydantic_models.UserCreateResponse)
+async def create_user(user: pydantic_models.UserCreate, db: Session = Depends(get_db)):
+    new_user = models.User(**user.dict())
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+```

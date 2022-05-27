@@ -100,3 +100,14 @@ async def update_quote(id: int, post: pydantic_models.Post,
     quote_query.update(post.dict(), synchronize_session=False)
     db.commit()
     return quote_query.first()
+
+
+@app.post("/users", status_code=status.HTTP_201_CREATED,
+          response_model=pydantic_models.UserCreateResponse)
+async def create_user(user: pydantic_models.UserCreate,
+                      db: Session = Depends(get_db)):
+    new_user = models.User(**user.dict())
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
