@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Response, status, HTTPException
 from pydantic import BaseModel
-from random import randrange
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import time
 
 app = FastAPI()
 
@@ -9,6 +11,21 @@ class Post(BaseModel):
     title: str
     content: str
 
+
+while True:
+    try:
+        conn = psycopg2.connect(host='localhost',
+                                database='fastapi',
+                                user='postgres',
+                                password='7890',
+                                cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
+        print('Successfully connected to the database.')
+        break
+    except Exception as error:
+        print("Connection to the database failed.")
+        print("Error: ", error)
+        time.sleep(2)
 
 my_posts = [
     {
@@ -52,57 +69,63 @@ def get_post_index(id):
             return index
 
 
+# Root page
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
 
 
+# Get all posts
 @app.get("/posts")
 async def posts():
-    return {"posts": my_posts}
+    cursor.execute(""" SELECT * FROM quotes """)
+    posts = cursor.fetchall()
+    return {"posts": posts}
 
 
-@app.get('/about')
-async def about():
-    return {"about": "This is the about page."}
-
-
+# Create posts
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
 async def create_posts(post: Post):
-    posts_dict = post.dict()
-    posts_dict['id'] = randrange(0, 100000)
-    my_posts.append(posts_dict)
-    return {"data": posts_dict}
+    cursor.execute(
+        """ INSERT INTO quotes (title, content) VALUES (%s, %s) RETURNING * """, (post.title, post.content))
+    new_quotes = cursor.fetchone()
+    conn.commit()
+    return {"data": new_quotes}
 
 
+# Get all posts by ID
 @app.get("/posts/{id}")
 async def get_post(id: int):
-    post = find_post(id)
-    if not post:
+    cursor.execute("""SELECT * FROM quotes WHERE id = %s""", (str(id)))
+    quote = cursor.fetchone()
+    if not quote:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    return {"message": post}
+    return {"Quote": quote}
 
 
-@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
+# Delete posts by ID
+@ app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_post(id: int):
-    index = get_post_index(id)
-    if index is not None:
-        my_posts.pop(index)
-    else:
+    cursor.execute(
+        """DELETE FROM quotes WHERE id = %s RETURNING *""", (str(id)))
+    deleted_quote = cursor.fetchone()
+    conn.commit()
+    if deleted_quote is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.put("/posts/{id}")
+# Update posts by ID
+@ app.put("/posts/{id}")
 async def update_post(id: int, post: Post):
-    index = get_post_index(id)
-    if index is not None:
-        post_dict = post.dict()
-        post_dict["id"] = id
-        my_posts[index] = post_dict
-    else:
+    cursor.execute(
+        """UPDATE quotes SET title = %s, content = %s WHERE id = %s RETURNING *""",
+        (post.title, post.content, str(id)))
+    updated_quotes = cursor.fetchall()
+    conn.commit()
+    if updated_quotes is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    return {"message": post_dict}
+    return {"Updated quotes": updated_quotes}
