@@ -39,7 +39,8 @@ async def create_posts(payLoad: dict = Body(...)):
 
 ### Pydantic library
 
-- Used to force the client to send the POST request body in a specific format.
+- Pydantic is a data validation and settings management using python type annotations.
+  - Used to force the client to send the POST request body in a specific format.
 
 ```python
 ...
@@ -179,9 +180,7 @@ async def update_post(id: int, post: Post):
 
 ---
 
-## Storing and manipulating data in a Database
-
-### To connect to Postgres using Psycopg2
+## Storing and manipulating data in a PostgresDB using Psycopg2
 
 ```python
 import psycopg2
@@ -273,4 +272,141 @@ async def update_post(id: int, post: Post):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
     return {"Updated quotes": updated_quotes}
+```
+
+---
+
+## Storing and manipulating data in a PostgresDB using SQLAlchemy
+
+- **Don’t try to mug up the shit below. Just copy and paste**.
+- Create two new python files.
+
+```python
+./app
+├── database.py # connects the app to Postgres using SQLAlchemy
+└── models.py # contains the database models
+```
+
+### To connect to Postgres using SQLAlchemy:
+
+```python
+# ./app/database.py
+
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+SQLALCHEMY_DATABASE_URL = 'postgres://<username>:<password>@<ip_address>/<db_name>'
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+```
+
+### To create database models:
+
+```python
+# .app/models.py
+
+from .database import Base
+from sqlalchemy import Column, Integer, String
+
+class Posts(Base):
+    __tablename__ = "quotes"
+
+    id = Column(Integer, primary_key=True, nullable=False)
+    title = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+### Import the database and models into main:
+
+```python
+# .app/main.py
+...
+from fastapi import Depends
+from .database import engine, get_db
+from . import models
+
+models.Base.metadata.create_all(bind=engine)
+```
+
+- SQLAlchemy has a limitation. It can create new db.
+  - But if we change the db schema in the `models.py` file, it won’t update the db.
+  - To do this we must use - Alembic - a database migration tool.
+
+### To add a new quote:
+
+```python
+# .app/main.py
+
+# Create quotes
+@app.post("/quotes", status_code=status.HTTP_201_CREATED)
+async def create_quotes(post: Post, db: Session = Depends(get_db)):
+    # This will unpack the request data as a dictionary.
+    new_quote = models.Quote(**post.dict())
+    db.add(new_quote)
+    db.commit()
+    db.refresh(new_quote)
+    return {"Quote": new_quote}
+```
+
+### To get a quote by ID:
+
+```python
+# .app/main.py
+
+# Get quotes by ID
+@app.get("/quotes/{id}")
+async def get_quote(id: int, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).filter(models.Quote.id == id).first()
+    if not quote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"A quote with the id: {id} was not found.")
+    return {"Quote": quote}
+```
+
+### To delete a quote by ID:
+
+```python
+# .app/main.py
+
+# Delete quotes by ID
+@ app.delete("/quotes/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_post(id: int, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).filter(models.Quote.id == id)
+    if quote.first() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"A quote with the id: {id} was not found.")
+    quote.delete(synchronize_session=False)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+```
+
+### To update a quote by ID:
+
+```python
+# .app/main.py
+
+# Update a quote by ID
+@app.put("/quotes/{id}")
+async def update_post(id: int, post: Post, db: Session = Depends(get_db)):
+    quote_query = db.query(models.Quote).filter(models.Quote.id == id)
+    quote = quote_query.first()
+    if quote is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"A quote with the id: {id} was not found.")
+    quote_query.update(post.dict(), synchronize_session=False)
+    db.commit()
+    return {"Updated quote": quote_query.first()}
 ```

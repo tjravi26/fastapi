@@ -1,33 +1,14 @@
-from fastapi import FastAPI, Response, status, HTTPException
-from pydantic import BaseModel
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import time
+from fastapi import FastAPI, Response, status, HTTPException, Depends
+from .database import engine, get_db
+from . import models, pydantic_models
+from sqlalchemy.orm import Session
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 
-class Post(BaseModel):
-    title: str
-    content: str
-
-
-while True:
-    try:
-        conn = psycopg2.connect(host='localhost',
-                                database='fastapi',
-                                user='postgres',
-                                password='7890',
-                                cursor_factory=RealDictCursor)
-        cursor = conn.cursor()
-        print('Successfully connected to the database.')
-        break
-    except Exception as error:
-        print("Connection to the database failed.")
-        print("Error: ", error)
-        time.sleep(2)
-
-my_posts = [
+my_quotes = [
     {
         "title": "This is her 1st quote.",
         "content": "Beauty comes from within.",
@@ -57,75 +38,70 @@ my_posts = [
 ]
 
 
-def find_post(id):
-    for post in my_posts:
-        if post["id"] == int(id):
-            return post
-
-
-def get_post_index(id):
-    for index, post in enumerate(my_posts):
-        if post['id'] == id:
-            return index
-
-
 # Root page
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
 
 
-# Get all posts
-@app.get("/posts")
-async def posts():
-    cursor.execute(""" SELECT * FROM quotes """)
-    posts = cursor.fetchall()
-    return {"posts": posts}
+# This creates the table
+@app.get("/sqlalchemy")
+# Here Depends is the dependency from above.
+async def test_quotes(db: Session = Depends(get_db)):
+    return {"status": "success"}
 
 
-# Create posts
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
-async def create_posts(post: Post):
-    cursor.execute(
-        """ INSERT INTO quotes (title, content) VALUES (%s, %s) RETURNING * """, (post.title, post.content))
-    new_quotes = cursor.fetchone()
-    conn.commit()
-    return {"data": new_quotes}
+# Get all quotes
+@app.get("/quotes")
+async def quotes(db: Session = Depends(get_db)):
+    quotes = db.query(models.Quote).all()
+    return {"Quotes": quotes}
 
 
-# Get all posts by ID
-@app.get("/posts/{id}")
-async def get_post(id: int):
-    cursor.execute("""SELECT * FROM quotes WHERE id = %s""", (str(id)))
-    quote = cursor.fetchone()
+# Create quotes
+@app.post("/quotes", status_code=status.HTTP_201_CREATED)
+async def create_quotes(post: pydantic_models.Post,
+                        db: Session = Depends(get_db)):
+    # This will unpack the request data as a dictionary.
+    new_quote = models.Quote(**post.dict())
+    db.add(new_quote)
+    db.commit()
+    db.refresh(new_quote)
+    return {"Quote": new_quote}
+
+
+# Get quotes by ID
+@app.get("/quotes/{id}")
+async def get_quote(id: int, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).filter(models.Quote.id == id).first()
     if not quote:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
     return {"Quote": quote}
 
 
-# Delete posts by ID
-@ app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_post(id: int):
-    cursor.execute(
-        """DELETE FROM quotes WHERE id = %s RETURNING *""", (str(id)))
-    deleted_quote = cursor.fetchone()
-    conn.commit()
-    if deleted_quote is None:
+# Delete quotes by ID
+@app.delete("/quotes/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quote(id: int, db: Session = Depends(get_db)):
+    quote = db.query(models.Quote).filter(
+        models.Quote.id == id)
+    if quote.first() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
+    quote.delete(synchronize_session=False)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# Update posts by ID
-@ app.put("/posts/{id}")
-async def update_post(id: int, post: Post):
-    cursor.execute(
-        """UPDATE quotes SET title = %s, content = %s WHERE id = %s RETURNING *""",
-        (post.title, post.content, str(id)))
-    updated_quotes = cursor.fetchall()
-    conn.commit()
-    if updated_quotes is None:
+# Update a quote by ID
+@app.put("/quotes/{id}")
+async def update_quote(id: int, post: pydantic_models.Post,
+                       db: Session = Depends(get_db)):
+    quote_query = db.query(models.Quote).filter(models.Quote.id == id)
+    quote = quote_query.first()
+    if quote is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    return {"Updated quotes": updated_quotes}
+    quote_query.update(post.dict(), synchronize_session=False)
+    db.commit()
+    return {"Updated quote": quote_query.first()}
