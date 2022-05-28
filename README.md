@@ -484,3 +484,66 @@ async def create_user(user: pydantic_models.UserCreate, db: Session = Depends(ge
     db.refresh(new_user)
     return new_user
 ```
+
+---
+
+## Securing information with Hashing
+
+- Install both passlib and bcrypt libraries. `$ pip install passlib\[bcrypt\]`
+
+```python
+# Create a file under .app/utils.py
+# .app/utils.py
+from passlib.context import CryptContext
+
+# schemes tells passlib which hashing algorithm to use.
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str):
+    return pwd_context.hash(password)
+```
+
+```python
+# .app/main.py
+...
+from .utils import hash_password # new
+
+# User registration
+@app.post("/users", status_code=status.HTTP_201_CREATED,
+          response_model=pydantic_models.UserCreateResponse)
+async def create_user(user: pydantic_models.UserCreate,
+                      db: Session = Depends(get_db)):
+    hashed_password = hash_password(user.password) # new
+    user.password = hashed_password # new
+    new_user = models.User(**user.dict())
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+```
+
+### To get user information by ID:
+
+- Create a new pydantic model for user info response.
+
+```python
+# .app/pydantic_models.py
+
+class UserGetResponse(BaseModel):
+    email: EmailStr
+    class Config:
+        orm_mode = True
+```
+
+```python
+# .app/main.py
+
+# Get user information
+@app.get("/users/{id}", response_model=pydantic_models.UserGetResponse)
+async def users(id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"User with the userID: {id} does not exist.")
+    return user
+```

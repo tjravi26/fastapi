@@ -19,7 +19,14 @@ class UserCreate(BaseModel):
 
 
 class UserCreateResponse(BaseModel):
-    email: str
+    email: EmailStr
+
+    class Config:
+        orm_mode = True
+
+
+class UserGetResponse(BaseModel):
+    email: EmailStr
 
     class Config:
         orm_mode = True
