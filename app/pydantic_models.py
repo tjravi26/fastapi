@@ -1,12 +1,14 @@
 from pydantic import BaseModel, EmailStr
 
 
-class Post(BaseModel):  # This is a pydantic model.
-    title: str
+class Quote(BaseModel):  # This is a pydantic model.
+    person: str
     content: str
 
 
-class PostResponse(BaseModel):
+class QuoteResponse(BaseModel):
+    id: int
+    person: str
     content: str
 
     class Config:

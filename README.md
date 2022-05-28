@@ -54,10 +54,10 @@ class Post(BaseModel): # Pydantic will use this model to check the post body for
     # If user doesn't provide, the default is set to None.
     rating: Optional[int] = None
 
-@app.post("/posts")
-async def create_posts(new_post: Post): # Here we reference the class 'Post'
-	  print(new_post.dict()) # Since 'new_post' is a pydantic model, it has methods like 'dict()'
-    return {"data": new_post}
+@app.post("/quote")
+async def create_posts(new_post: Quote): # Here we reference the class 'Quote'
+	  print(new_quote.dict()) # Since 'new_quote' is a pydantic model, it has methods like 'dict()'
+    return {"data": new_quote}
 ```
 
 ### To store data locally instead of a database
@@ -65,7 +65,7 @@ async def create_posts(new_post: Post): # Here we reference the class 'Post'
 - FastAPI has a serialising feature. It will automatically convert list, array, dicts to json while returning.
 
 ```python
-my_posts = [
+my_quotes = [
     {
         "title": "This is her 1st quote.",
         "content": "Beauty comes from within.",
@@ -93,89 +93,89 @@ my_posts = [
     }
 ]
 
-@app.post("/posts")
-async def create_posts(post: Post):
-    posts_dict = post.dict()
-    posts_dict['id'] = randrange(0, 100000)
-    my_posts.append(posts_dict)
-    return {"data": posts_dict}
+@app.post("/quotes")
+async def create_posts(quote: Quote):
+    quotes_dict = quote.dict()
+    quotes_dict['id'] = randrange(0, 100000)
+    my_quotes.append(quotes_dict)
+    return {"data": quotes_dict}
 ```
 
 - The POST request must have a title and content which will be added to the above list.
 
-### To get posts by ID
+### To get quote by ID
 
 ```python
 ...
-def find_post(id):
-    for post in my_posts:
-        if post["id"] == id:
-            return post
+def find_quote(id):
+    for quote in my_quotes:
+        if quote["id"] == id:
+            return quote
 
-@app.get("/posts/{id}")
-async def get_post(id:int): # :int here will convert incoming data to integer
-    post = find_post(id)
-    return {"message": post}
+@app.get("/quotes/{id}")
+async def get_quote(id:int): # :int here will convert incoming data to integer
+    quote = find_quote(id)
+    return {"message": quote}
 ```
 
-### Return error code if post not found
+### Return error code if quote not found
 
 ```python
 ...
 from fastapi import, status, HTTPException
 
-@app.get("/posts/{id}")
-async def get_post(id: int):
-    post = find_post(id)
-    if not post:
+@app.get("/quotes/{id}")
+async def get_quote(id: int):
+    quote = find_quote(id)
+    if not quote:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    return {"message": post}
+    return {"message": quote}
 ```
 
 - ‘HTTPException’ is used to raise an HTTP error.
 - ’status’ consists a list of error codes.
 
-### To delete a post by ID
+### To delete a quote by ID
 
 ```python
 ...
 from fastapi import Response
 
-def get_post_index(id):
-    for index, post in enumerate(my_posts):
-        if post['id'] == id:
+def get_quotes_index(id):
+    for index, quote in enumerate(my_quotes):
+        if quote['id'] == id:
             return index
 
-@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_post(id: int):
-    index = get_post_index(id)
+@app.delete("/quotes/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quote(id: int):
+    index = get_quote_index(id)
     if index is not None:
-        my_posts.pop(index)
+        my_quotes.pop(index)
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 ```
 
-- First create a function which finds the post by id.
-- Call the function and if post index found, delete it. Else, raise a HTTP exception error.
+- First create a function which finds the quote by id.
+- Call the function and if quote index found, delete it. Else, raise a HTTP exception error.
 
-### To update a post by ID
+### To update a quote by ID
 
 ```python
 ...
-@app.put("/posts/{id}")
-async def update_post(id: int, post: Post):
-    index = get_post_index(id)
+@app.put("/quotes/{id}")
+async def update_quote(id: int, quote: Quote):
+    index = get_quote_index(id)
     if index is not None:
-        post_dict = post.dict()
-        post_dict["id"] = id
-        my_posts[index] = post_dict
+        quote_dict = quote.dict()
+        quote_dict["id"] = id
+        my_quotes[index] = quote_dict
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    return {"message": post_dict}
+    return {"message": quote_dict}
 ```
 
 ---
@@ -203,36 +203,36 @@ while True:
         time.sleep(2) # Will try to reconnect to database every 2 seconds.
 ```
 
-### To get all the posts from db:
+### To get all the quotes from db:
 
 ```python
-# Get all posts
-@app.get("/posts")
-async def posts():
+# Get all quotes
+@app.get("/quotes")
+async def quotes():
     cursor.execute(""" SELECT * FROM quotes """)
     quotes = cursor.fetchall()
-    return {"posts": posts}
+    return {"quotes": quotes}
 ```
 
-### To create a post in the db:
+### To create a quote in the db:
 
 ```python
-# Create posts
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
-async def create_posts(post: Post):
+# Create quotes
+@app.post("/quotes", status_code=status.HTTP_201_CREATED)
+async def create_quotes(quote: Quote):
     cursor.execute(
-        """ INSERT INTO quotes (title, content) VALUES (%s, %s) RETURNING * """, (post.title, post.content))
+        """ INSERT INTO quotes (title, content) VALUES (%s, %s) RETURNING * """, (quote.name, quote.content))
     new_quotes = cursor.fetchone()
     conn.commit()
     return {"quotes": new_quotes}
 ```
 
-### To get a post by ID from the db:
+### To get a quote by ID from the db:
 
 ```python
-# Get all posts by ID
-@app.get("/posts/{id}")
-async def get_post(id: int):
+# Get all quotes by ID
+@app.get("/quotes/{id}")
+async def get_quote(id: int):
     cursor.execute("""SELECT * FROM quotes WHERE id = %s""", (str(id)))
     quote = cursor.fetchone()
     if not quote:
@@ -241,12 +241,12 @@ async def get_post(id: int):
     return {"Quote": quote}
 ```
 
-### To delete a post from the db:
+### To delete a quote from the db:
 
 ```python
-# Delete posts by ID
-@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_post(id: int):
+# Delete quotes by ID
+@app.delete("/quotes/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quote(id: int):
     cursor.execute(
         """DELETE FROM quotes WHERE id = %s RETURNING *""", (str(id)))
     deleted_quote = cursor.fetchone()
@@ -257,15 +257,15 @@ async def delete_post(id: int):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 ```
 
-### To update a post in the db:
+### To update a quote in the db:
 
 ```python
-# Update posts by ID
-@ app.put("/posts/{id}")
-async def update_post(id: int, post: Post):
+# Update quotes by ID
+@ app.put("/quotes/{id}")
+async def update_quote(id: int, quote: Quote):
     cursor.execute(
         """UPDATE quotes SET title = %s, content = %s WHERE id = %s RETURNING *""",
-        (post.title, post.content, str(id)))
+        (quote.name, quote.content, str(id)))
     updated_quotes = cursor.fetchall()
     conn.commit()
     if updated_quotes is None:
@@ -313,7 +313,7 @@ Base = declarative_base()
 from .database import Base
 from sqlalchemy import Column, Integer, String
 
-class Posts(Base):
+class Quote(Base):
     __tablename__ = "quotes"
 
     id = Column(Integer, primary_key=True, nullable=False)
@@ -352,9 +352,9 @@ models.Base.metadata.create_all(bind=engine)
 
 # Create quotes
 @app.post("/quotes", status_code=status.HTTP_201_CREATED)
-async def create_quotes(post: Post, db: Session = Depends(get_db)):
+async def create_quotes(quote: Quote, db: Session = Depends(get_db)):
     # This will unpack the request data as a dictionary.
-    new_quote = models.Quote(**post.dict())
+    new_quote = models.Quote(**quote.dict())
     db.add(new_quote)
     db.commit()
     db.refresh(new_quote)
@@ -383,7 +383,7 @@ async def get_quote(id: int, db: Session = Depends(get_db)):
 
 # Delete quotes by ID
 @ app.delete("/quotes/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_post(id: int, db: Session = Depends(get_db)):
+async def delete_quote(id: int, db: Session = Depends(get_db)):
     quote = db.query(models.Quote).filter(models.Quote.id == id)
     if quote.first() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -400,13 +400,13 @@ async def delete_post(id: int, db: Session = Depends(get_db)):
 
 # Update a quote by ID
 @app.put("/quotes/{id}")
-async def update_post(id: int, post: Post, db: Session = Depends(get_db)):
+async def update_quote(id: int, quote: Quote, db: Session = Depends(get_db)):
     quote_query = db.query(models.Quote).filter(models.Quote.id == id)
     quote = quote_query.first()
     if quote is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    quote_query.update(post.dict(), synchronize_session=False)
+    quote_query.update(quote.dict(), synchronize_session=False)
     db.commit()
     return {"Updated quote": quote_query.first()}
 ```
@@ -420,11 +420,12 @@ async def update_post(id: int, post: Post, db: Session = Depends(get_db)):
 
 from pydantic import BaseModel
 
-class Post(BaseModel):  # This is a pydantic model.
-    title: str
+class Quote(BaseModel):  # This is a pydantic model.
+    name: str
     content: str
 
-class PostResponse(BaseModel):
+class QuoteResponse(BaseModel):
+	  name: str
     content: str
     class Config:
         orm_mode = True
@@ -437,8 +438,8 @@ from . import pydantic_models
 ```
 
 ```python
-# To create a new post
-@app.post("/quotes", response_model=pydantic_models.PostResponse)
+# To create a new quote
+@app.post("/quotes", response_model=pydantic_models.QuoteResponse)
 ```
 
 ---
@@ -562,7 +563,7 @@ async def users(id: int, db: Session = Depends(get_db)):
 ├── models.py
 ├── pydantic_models.py
 ├── routes # shifted path operations this folder.
-│   ├── posts.py
+│   ├── quotes.py
 │   └── users.py
 └── utils.py
 ```
@@ -573,13 +574,13 @@ async def users(id: int, db: Session = Depends(get_db)):
 from fastapi import FastAPI
 from .database import engine
 from . import models
-from .routes import posts, users
+from .routes import quotes, users
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-app.include_router(posts.router) # new
+app.include_router(quotes.router) # new
 app.include_router(users.router) # new
 
 # Root page
@@ -589,7 +590,7 @@ async def root():
 ```
 
 ```python
-# .app/routes/posts.py
+# .app/routes/quotes.py
 
 from fastapi import Depends, status, HTTPException, APIRouter
 from typing import List
@@ -597,28 +598,31 @@ from sqlalchemy.orm import Session
 from .. import models, pydantic_models
 from ..database import get_db
 
-router = APIRouter() # new
+router = APIRouter( # new
+    prefix="/quotes",
+    tags=['Quotes ']
+)
 
 # Get all quotes
-@router.get("/quotes", response_model=List[pydantic_models.PostResponse])
+@router.get("/quotes", response_model=List[pydantic_models.QuoteResponse])
 async def quotes(db: Session = Depends(get_db)):
     quotes = db.query(models.Quote).all()
     return quotes
 
 # Create quotes
 @router.post("/quotes", status_code=status.HTTP_201_CREATED,
-             response_model=pydantic_models.PostResponse)
-async def create_quotes(post: pydantic_models.Post,
+             response_model=pydantic_models.QuoteResponse)
+async def create_quotes(quote: pydantic_models.Quote,
                         db: Session = Depends(get_db)):
     # This will unpack the request data as a dictionary.
-    new_quote = models.Quote(**post.dict())
+    new_quote = models.Quote(**quote.dict())
     db.add(new_quote)
     db.commit()
     db.refresh(new_quote)
     return new_quote
 
 # Get quotes by ID
-@router.get("/quotes/{id}", response_class=pydantic_models.PostResponse)
+@router.get("/quotes/{id}", response_model=pydantic_models.QuoteResponse)
 async def get_quote(id: int, db: Session = Depends(get_db)):
     quote = db.query(models.Quote).filter(models.Quote.id == id).first()
     if not quote:
@@ -639,15 +643,15 @@ async def delete_quote(id: int, db: Session = Depends(get_db)):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 # Update a quote by ID
-@router.put("/quotes/{id}", response_model=pydantic_models.PostResponse)
-async def update_quote(id: int, post: pydantic_models.Post,
+@router.put("/quotes/{id}", response_model=pydantic_models.QuoteResponse)
+async def update_quote(id: int, quote: pydantic_models.Quote,
                        db: Session = Depends(get_db)):
     quote_query = db.query(models.Quote).filter(models.Quote.id == id)
     quote = quote_query.first()
     if quote is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"A quote with the id: {id} was not found.")
-    quote_query.update(post.dict(), synchronize_session=False)
+    quote_query.update(quote.dict(), synchronize_session=False)
     db.commit()
     return quote_query.first()
 ```
@@ -660,8 +664,10 @@ from .. import models, pydantic_models, utils
 from sqlalchemy.orm import Session
 from ..database import get_db
 
-router = APIRouter() # new
-
+router = APIRouter( # new
+    prefix="/users",
+    tags=['Users']
+)
 # User registration
 @router.post("/users", status_code=status.HTTP_201_CREATED,
              response_model=pydantic_models.UserCreateResponse)

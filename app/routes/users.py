@@ -4,11 +4,14 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/users",
+    tags=['Users']
+)
 
 
 # User registration
-@router.post("/users", status_code=status.HTTP_201_CREATED,
+@router.post("/", status_code=status.HTTP_201_CREATED,
              response_model=pydantic_models.UserCreateResponse)
 async def create_user(user: pydantic_models.UserCreate,
                       db: Session = Depends(get_db)):
@@ -22,7 +25,7 @@ async def create_user(user: pydantic_models.UserCreate,
 
 
 # Get user information
-@router.get("/users/{id}", response_model=pydantic_models.UserGetResponse)
+@router.get("/{id}", response_model=pydantic_models.UserGetResponse)
 async def users(id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == id).first()
     if user is None:
