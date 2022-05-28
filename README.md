@@ -490,7 +490,10 @@ async def create_user(user: pydantic_models.UserCreate, db: Session = Depends(ge
 
 ## Securing information with Hashing
 
-- Install both passlib and bcrypt libraries. `$ pip install passlib\[bcrypt\]`
+- PassLib is a great Python package to handle password hashes.
+- It supports many secure hashing algorithms and utilities to work with them.
+- The recommended algorithm is “Bcrypt”.
+- `$ pip install passlib\[bcrypt\]`
 
 ```python
 # Create a file under .app/utils.py
@@ -689,4 +692,94 @@ async def users(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"User with the userID: {id} does not exist.")
     return user
+```
+
+---
+
+## Using JWT Authentication
+
+[image:252A67DE-1B7C-4337-9DD7-A645815C1170-27025-000057FB21503F11/Screenshot 2022-05-28 at 11.09.09 AM.jpg]
+
+- Install `python-jose` to generate and verify the JWT tokens in Python.
+  `$ pip install python-jose\[\cryptography]`
+
+### Create a `utils.py` for password hashing
+
+```python
+# .app/utils.py
+
+from passlib.context import CryptContext
+
+# schemes tells passlib which hashing algorithm to use.
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str): # Creates password hash
+    return pwd_context.hash(password)
+
+def verify_password(plain_password, hashed_password): # Verifies password hash
+    return pwd_context.verify(plain_password, hashed_password)
+```
+
+### Create a `oauth2.py` file for creating a JWT token
+
+```python
+# .app/oauth2.py
+
+from jose import jwt, JWTError
+from datetime import datetime, timedelta
+
+# To create a SECRET_KEY type `$ openssl rand -hex 32` in the terminal.
+SECRET_KEY = "89e792e7589cb77ca7ea5758e3aa305e8aa45e93e945c205f31974ed03582571"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+```
+
+### Create a router file for authentication
+
+```python
+# .app/routers/auth.py
+
+from fastapi import APIRouter, Depends, status, HTTPException
+from sqlalchemy.orm import Session
+from ..database import get_db
+from .. import models, utils, oauth2
+from fastapi.security import OAuth2PasswordRequestForm
+
+router = APIRouter(
+    tags=['Authentication']
+)
+
+@router.post("/login")
+async def login_authentication(
+        user_credentials: OAuth2PasswordRequestForm = Depends(),
+        db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(
+        models.User.email == user_credentials.username).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Invalid credentials.")
+    if not utils.verify_password(user_credentials.password, user.password):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Invalid credentials.")
+    access_token = oauth2.create_access_token(data={"user_id": user.id})
+    return {"token_type": "bearer",
+            "access_token": access_token}
+```
+
+### Import the `auth.py` into `main.py`
+
+```python
+# .app/main.py
+...
+from .routers import auth
+
+app.include_router(auth.router)
 ```

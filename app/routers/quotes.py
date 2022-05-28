@@ -1,9 +1,9 @@
 from fastapi import Depends, status, HTTPException, APIRouter, Response
 from typing import List
 from sqlalchemy.orm import Session
-from .. import models, pydantic_models
+from .. import models
 from ..database import get_db
-
+from ..pydantic_models. quote_model import Quote, QuoteResponse
 
 router = APIRouter(
     prefix="/quotes",
@@ -12,7 +12,7 @@ router = APIRouter(
 
 
 # Get all quotes
-@router.get("/", response_model=List[pydantic_models.QuoteResponse])
+@router.get("/", response_model=List[QuoteResponse])
 async def quotes(db: Session = Depends(get_db)):
     quotes = db.query(models.Quote).all()
     return quotes
@@ -20,8 +20,8 @@ async def quotes(db: Session = Depends(get_db)):
 
 # Create quotes
 @router.post("/", status_code=status.HTTP_201_CREATED,
-             response_model=pydantic_models.QuoteResponse)
-async def create_quotes(post: pydantic_models.Quote,
+             response_model=QuoteResponse)
+async def create_quotes(post: Quote,
                         db: Session = Depends(get_db)):
     # This will unpack the request data as a dictionary.
     new_quote = models.Quote(**post.dict())
@@ -32,7 +32,7 @@ async def create_quotes(post: pydantic_models.Quote,
 
 
 # Get quotes by ID
-@router.get("/{id}", response_model=pydantic_models.QuoteResponse)
+@router.get("/{id}", response_model=QuoteResponse)
 async def get_quote(id: int, db: Session = Depends(get_db)):
     quote = db.query(models.Quote).filter(models.Quote.id == id).first()
     if not quote:
@@ -55,8 +55,8 @@ async def delete_quote(id: int, db: Session = Depends(get_db)):
 
 
 # Update a quote by ID
-@router.put("/{id}", response_model=pydantic_models.QuoteResponse)
-async def update_quote(id: int, post: pydantic_models.Quote,
+@router.put("/{id}", response_model=QuoteResponse)
+async def update_quote(id: int, post: Quote,
                        db: Session = Depends(get_db)):
     quote_query = db.query(models.Quote).filter(models.Quote.id == id)
     quote = quote_query.first()
