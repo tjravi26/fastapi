@@ -1,9 +1,7 @@
-from fastapi import FastAPI, Response, status, HTTPException, Depends
-from .database import engine, get_db
-from . import models, pydantic_models
-from sqlalchemy.orm import Session
-from typing import List
-from .utils import hash_password
+from fastapi import FastAPI
+from .database import engine
+from . import models
+from .routes import posts, users
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -40,89 +38,11 @@ my_quotes = [
 
 ]
 
+app.include_router(posts.router)
+app.include_router(users.router)
+
 
 # Root page
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
-
-
-# Get all quotes
-@app.get("/quotes", response_model=List[pydantic_models.PostResponse])
-async def quotes(db: Session = Depends(get_db)):
-    quotes = db.query(models.Quote).all()
-    return quotes
-
-
-# Create quotes
-@app.post("/quotes", status_code=status.HTTP_201_CREATED,
-          response_model=pydantic_models.PostResponse)
-async def create_quotes(post: pydantic_models.Post,
-                        db: Session = Depends(get_db)):
-    # This will unpack the request data as a dictionary.
-    new_quote = models.Quote(**post.dict())
-    db.add(new_quote)
-    db.commit()
-    db.refresh(new_quote)
-    return new_quote
-
-
-# Get quotes by ID
-@app.get("/quotes/{id}", response_class=pydantic_models.PostResponse)
-async def get_quote(id: int, db: Session = Depends(get_db)):
-    quote = db.query(models.Quote).filter(models.Quote.id == id).first()
-    if not quote:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"A quote with the id: {id} was not found.")
-    return quote
-
-
-# Delete quotes by ID
-@app.delete("/quotes/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_quote(id: int, db: Session = Depends(get_db)):
-    quote = db.query(models.Quote).filter(
-        models.Quote.id == id)
-    if quote.first() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"A quote with the id: {id} was not found.")
-    quote.delete(synchronize_session=False)
-    db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# Update a quote by ID
-@app.put("/quotes/{id}", response_model=pydantic_models.PostResponse)
-async def update_quote(id: int, post: pydantic_models.Post,
-                       db: Session = Depends(get_db)):
-    quote_query = db.query(models.Quote).filter(models.Quote.id == id)
-    quote = quote_query.first()
-    if quote is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"A quote with the id: {id} was not found.")
-    quote_query.update(post.dict(), synchronize_session=False)
-    db.commit()
-    return quote_query.first()
-
-
-# User registration
-@app.post("/users", status_code=status.HTTP_201_CREATED,
-          response_model=pydantic_models.UserCreateResponse)
-async def create_user(user: pydantic_models.UserCreate,
-                      db: Session = Depends(get_db)):
-    hashed_password = hash_password(user.password)
-    user.password = hashed_password
-    new_user = models.User(**user.dict())
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
-
-
-# Get user information
-@app.get("/users/{id}", response_model=pydantic_models.UserGetResponse)
-async def users(id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == id).first()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"User with the userID: {id} does not exist.")
-    return user
