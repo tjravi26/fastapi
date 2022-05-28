@@ -1,5 +1,5 @@
 from .database import Base
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String
 
 
 class Quote(Base):
@@ -8,6 +8,8 @@ class Quote(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     person = Column(String, nullable=False)
     content = Column(String, nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id",
+                                          ondelete="CASCADE"), nullable=False)
 
 
 class User(Base):
